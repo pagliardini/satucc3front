@@ -13,12 +13,14 @@ import Compras from './pages/gestion/Compras';
 import Bajas from './pages/gestion/Bajas';
 import Reasignar from './pages/gestion/Reasignar';
 import Configuracion from './pages/Configuracion';
+import { Notifications } from '@mantine/notifications';
 
 function App() {
   const [opened, { toggle }] = useDisclosure();
 
   return (
     <BrowserRouter>
+      <Notifications position="top-right" />
       <AppShell
         header={{ height: { base: 60, md: 70, lg: 80 } }}
         navbar={{

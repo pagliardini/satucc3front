@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Container, Title, Paper, Button, Group, TextInput, Table, Text, Loader, Alert, Box } from '@mantine/core';
+import { 
+  Container, 
+  Title, 
+  Paper, 
+  Button, 
+  Group, 
+  TextInput, 
+  Table, 
+  Text, 
+  Loader, 
+  Alert, 
+  Box,
+  Modal,
+  Select,
+  Switch,
+  Textarea,
+  Combobox,
+  useCombobox
+} from '@mantine/core';
 import axios from 'axios';
 import { 
   IconPlus, 
@@ -9,6 +27,8 @@ import {
   IconSortAscending2,
   IconSortDescending2 
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import { IconCheck } from '@tabler/icons-react';
 
 function Productos() {
   const [productos, setProductos] = useState([]);
@@ -17,25 +37,64 @@ function Productos() {
   const [error, setError] = useState(null);
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [tipos, setTipos] = useState([]);
+  const [marcas, setMarcas] = useState([]);
+  const [modelos, setModelos] = useState([]);
+  const [newProduct, setNewProduct] = useState({
+    tipo_id: '',
+    marca_id: '',
+    modelo_id: '',
+    descripcion: '',
+    inventariable: false,
+    activo: true
+  });
+  const [formError, setFormError] = useState(null);
+  const [tipoValue, setTipoValue] = useState('');
+  const [marcaValue, setMarcaValue] = useState('');
+  const [modeloValue, setModeloValue] = useState('');
+  const [formSuccess, setFormSuccess] = useState(false);
+
+  const tipoCombobox = useCombobox();
+  const marcaCombobox = useCombobox();
+  const modeloCombobox = useCombobox();
+
+  const fetchProductos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axios.get('http://127.0.0.1:5000/api/productos');
+      if (response.data) {
+        setProductos(response.data);
+      }
+    } catch (error) {
+      setError(error.message || 'Error al cargar los productos');
+      console.error('Error fetching productos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProductos = async () => {
+    fetchProductos();
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        const response = await axios.get('http://127.0.0.1:5000/api/productos');
-        if (response.data) {
-          setProductos(response.data);
-        }
+        const [tiposRes, marcasRes, modelosRes] = await Promise.all([
+          axios.get('http://127.0.0.1:5000/api/tipos'),
+          axios.get('http://127.0.0.1:5000/api/marcas'),
+          axios.get('http://127.0.0.1:5000/api/modelos')
+        ]);
+        setTipos(tiposRes.data);
+        setMarcas(marcasRes.data);
+        setModelos(modelosRes.data);
       } catch (error) {
-        setError(error.message || 'Error al cargar los productos');
-        console.error('Error fetching productos:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching data:', error);
       }
     };
-
-    fetchProductos();
+    fetchData();
   }, []);
 
   const handleSort = (field) => {
@@ -44,6 +103,57 @@ function Productos() {
     } else {
       setSortField(field);
       setSortDirection('asc');
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setFormError(null);
+      setFormSuccess(false);
+
+      // Validaciones antes de enviar
+      if (!newProduct.tipo_id || !newProduct.marca_id || !newProduct.modelo_id) {
+        setFormError('Todos los campos marcados con * son requeridos');
+        return;
+      }
+
+      const response = await axios.post('http://127.0.0.1:5000/api/productos/add_producto', newProduct);
+      
+      // Check both status and data.success
+      if (response.status === 201) {
+        setFormSuccess(true);
+        setFormError(null); // Ensure error is cleared
+        await fetchProductos();
+        
+        setTimeout(() => {
+          setModalOpen(false);
+          setFormSuccess(false);
+          // Reset form values
+          setNewProduct({
+            tipo_id: '',
+            marca_id: '',
+            modelo_id: '',
+            descripcion: '',
+            inventariable: false,
+            activo: true
+          });
+          setTipoValue('');
+          setMarcaValue('');
+          setModeloValue('');
+        }, 1500);
+      } else {
+        // Handle unexpected success response
+        setFormError('Error inesperado al crear el producto');
+        setFormSuccess(false);
+      }
+    } catch (error) {
+      console.error('Error creating product:', error);
+      setFormSuccess(false);
+      setFormError(
+        Array.isArray(error.response?.data?.errors) 
+          ? error.response.data.errors.join(', ') 
+          : 'Error al crear el producto'
+      );
     }
   };
 
@@ -118,16 +228,246 @@ function Productos() {
     msOverflowStyle: '-ms-autohiding-scrollbar',
   };
 
+  const getFilteredTipos = () => {
+    const shouldFilter = !tipos.some(tipo => tipo.nombre === tipoValue);
+    return shouldFilter
+      ? tipos.filter(tipo => tipo.nombre.toLowerCase().includes(tipoValue.toLowerCase().trim()))
+      : tipos;
+  };
+
+  const getFilteredMarcas = () => {
+    const shouldFilter = !marcas.some(marca => marca.nombre === marcaValue);
+    return shouldFilter
+      ? marcas.filter(marca => marca.nombre.toLowerCase().includes(marcaValue.toLowerCase().trim()))
+      : marcas;
+  };
+
+  const getFilteredModelos = () => {
+    const shouldFilter = !modelos.some(modelo => modelo.nombre === modeloValue);
+    return shouldFilter
+      ? modelos.filter(modelo => modelo.nombre.toLowerCase().includes(modeloValue.toLowerCase().trim()))
+      : modelos;
+  };
+
   return (
     <Container size="lg" py="xl">
       <Group justify="space-between" mb="xl">
         <Title order={1} style={{ color: '#323130' }}>
           Productos
         </Title>
-        <Button leftSection={<IconPlus size={14} />}>
+        <Button 
+          leftSection={<IconPlus size={14} />}
+          onClick={() => setModalOpen(true)}
+        >
           Nuevo Producto
         </Button>
       </Group>
+
+      <Modal
+        opened={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setFormError(null);
+          setFormSuccess(false);
+          // Reset values
+          setNewProduct({
+            tipo_id: '',
+            marca_id: '',
+            modelo_id: '',
+            descripcion: '',
+            inventariable: false,
+            activo: true
+          });
+          setTipoValue('');
+          setMarcaValue('');
+          setModeloValue('');
+        }}
+        title="Nuevo Producto"
+        size="lg"
+      >
+        {formError ? (
+          <Alert 
+            color="red" 
+            title="Error" 
+            mb="md"
+            icon={<IconAlertCircle size={16} />}
+          >
+            {formError}
+          </Alert>
+        ) : formSuccess ? (
+          <Alert 
+            color="green" 
+            title="Éxito" 
+            mb="md"
+            icon={<IconCheck size={16} />}
+          >
+            Producto creado correctamente
+          </Alert>
+        ) : null}
+
+        <Combobox
+          onOptionSubmit={(optionValue) => {
+            const tipo = tipos.find(t => t.nombre === optionValue);
+            if (tipo) {
+              setNewProduct({ ...newProduct, tipo_id: tipo.id.toString() });
+              setTipoValue(tipo.nombre);
+            }
+            tipoCombobox.closeDropdown();
+          }}
+          store={tipoCombobox}
+        >
+          <Combobox.Target>
+            <TextInput
+              label="Tipo"
+              placeholder="Seleccione o escriba un tipo"
+              required
+              value={tipoValue}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setTipoValue(value);
+                tipoCombobox.openDropdown();
+                tipoCombobox.updateSelectedOptionIndex();
+              }}
+              onClick={() => tipoCombobox.openDropdown()}
+              onFocus={() => tipoCombobox.openDropdown()}
+              onBlur={() => tipoCombobox.closeDropdown()}
+            />
+          </Combobox.Target>
+
+          <Combobox.Dropdown>
+            <Combobox.Options>
+              {getFilteredTipos().length === 0 ? (
+                <Combobox.Empty>No se encontraron tipos</Combobox.Empty>
+              ) : (
+                getFilteredTipos().map((tipo) => (
+                  <Combobox.Option value={tipo.nombre} key={tipo.id}>
+                    {tipo.nombre}
+                  </Combobox.Option>
+                ))
+              )}
+            </Combobox.Options>
+          </Combobox.Dropdown>
+        </Combobox>
+
+        <Combobox
+          onOptionSubmit={(optionValue) => {
+            const marca = marcas.find(m => m.nombre === optionValue);
+            if (marca) {
+              setNewProduct({ ...newProduct, marca_id: marca.id.toString() });
+              setMarcaValue(marca.nombre);
+            }
+            marcaCombobox.closeDropdown();
+          }}
+          store={marcaCombobox}
+        >
+          <Combobox.Target>
+            <TextInput
+              label="Marca"
+              placeholder="Seleccione o escriba una marca"
+              required
+              value={marcaValue}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setMarcaValue(value);
+                marcaCombobox.openDropdown();
+                marcaCombobox.updateSelectedOptionIndex();
+              }}
+              onClick={() => marcaCombobox.openDropdown()}
+              onFocus={() => marcaCombobox.openDropdown()}
+              onBlur={() => marcaCombobox.closeDropdown()}
+            />
+          </Combobox.Target>
+
+          <Combobox.Dropdown>
+            <Combobox.Options>
+              {getFilteredMarcas().length === 0 ? (
+                <Combobox.Empty>No se encontraron marcas</Combobox.Empty>
+              ) : (
+                getFilteredMarcas().map((marca) => (
+                  <Combobox.Option value={marca.nombre} key={marca.id}>
+                    {marca.nombre}
+                  </Combobox.Option>
+                ))
+              )}
+            </Combobox.Options>
+          </Combobox.Dropdown>
+        </Combobox>
+
+        <Combobox
+          onOptionSubmit={(optionValue) => {
+            const modelo = modelos.find(m => m.nombre === optionValue);
+            if (modelo) {
+              setNewProduct({ ...newProduct, modelo_id: modelo.id.toString() });
+              setModeloValue(modelo.nombre);
+            }
+            modeloCombobox.closeDropdown();
+          }}
+          store={modeloCombobox}
+        >
+          <Combobox.Target>
+            <TextInput
+              label="Modelo"
+              placeholder="Seleccione o escriba un modelo"
+              required
+              value={modeloValue}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setModeloValue(value);
+                modeloCombobox.openDropdown();
+                modeloCombobox.updateSelectedOptionIndex();
+              }}
+              onClick={() => modeloCombobox.openDropdown()}
+              onFocus={() => modeloCombobox.openDropdown()}
+              onBlur={() => modeloCombobox.closeDropdown()}
+            />
+          </Combobox.Target>
+
+          <Combobox.Dropdown>
+            <Combobox.Options>
+              {getFilteredModelos().length === 0 ? (
+                <Combobox.Empty>No se encontraron modelos</Combobox.Empty>
+              ) : (
+                getFilteredModelos().map((modelo) => (
+                  <Combobox.Option value={modelo.nombre} key={modelo.id}>
+                    {modelo.nombre}
+                  </Combobox.Option>
+                ))
+              )}
+            </Combobox.Options>
+          </Combobox.Dropdown>
+        </Combobox>
+
+        <Textarea
+          label="Descripción"
+          placeholder="Ingrese una descripción"
+          value={newProduct.descripcion}
+          onChange={(event) => setNewProduct({...newProduct, descripcion: event.currentTarget.value})}
+          mb="md"
+        />
+
+        <Switch
+          label="Inventariable"
+          checked={newProduct.inventariable}
+          onChange={(event) => setNewProduct({...newProduct, inventariable: event.currentTarget.checked})}
+          mb="md"
+        />
+
+        <Switch
+          label="Activo"
+          checked={newProduct.activo}
+          onChange={(event) => setNewProduct({...newProduct, activo: event.currentTarget.checked})}
+          mb="xl"
+        />
+
+        <Group justify="flex-end">
+          <Button variant="outline" onClick={() => setModalOpen(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit}>
+            Guardar
+          </Button>
+        </Group>
+      </Modal>
 
       {error ? (
         <Alert 
